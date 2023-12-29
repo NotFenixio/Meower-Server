@@ -11,8 +11,8 @@ app.url_map.strict_slashes = False
 cors(app, allow_origin="*")
 
 
-@app.get("/")
-async def index():
+@app.get("/<path:path>")
+async def index(path):
     return await quart.send_file("build/index.html")
 
 @app.get("/assets/<path:path>")
