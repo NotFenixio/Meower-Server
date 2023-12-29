@@ -1,3 +1,6 @@
 [submodule "better_profanity"]
 	path = better_profanity
 	url = https://github.com/meower-media-co/better_profanity.git
+[submodule "Meower-Svelte"]
+	path = Meower-Svelte
+	url = https://github.com/Meower-Media-co/Meower-Svelte
