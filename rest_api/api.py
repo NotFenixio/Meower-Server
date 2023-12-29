@@ -66,9 +66,9 @@ async def ip_tracer():
 @api.get("/v0/cloudlink")
 async def cl():
     if request.host.split(":")[0] == "localhost":
-        return await quart.redirect("localhost:3000")
+        return quart.redirect("ws://localhost:3000")
 
-    return await quart.redirect("server.meower.org")
+    return  quart.redirect("wss://server.meower.org")
 
 @api.get("/favicon.ico")  # Favicon, my ass. We need no favicon for an API.
 async def favicon_my_ass():
