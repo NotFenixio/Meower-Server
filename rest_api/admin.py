@@ -8,6 +8,7 @@ import time, pymongo
 
 import security
 from database import db, get_total_pages, blocked_ips, registration_blocked_ips
+from cloudlink import cl3_broadcast
 
 
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/admin")
@@ -390,12 +391,12 @@ async def delete_post(post_id):
 
     # Send delete post event
     if post["post_origin"] == "home" or (post["post_origin"] == "inbox" and post["u"] == "Server"):
-        app.cl.broadcast({
+        await cl3_broadcast({
             "mode": "delete",
             "id": post_id
         }, direct_wrap=True)
     elif post["post_origin"] == "inbox":
-        app.cl.broadcast({
+        await cl3_broadcast({
             "mode": "delete",
             "id": post_id
         }, direct_wrap=True, usernames=[post["u"]])
@@ -406,7 +407,7 @@ async def delete_post(post_id):
             "deleted": False
         }, projection={"members": 1})
         if chat:
-            app.cl.broadcast({
+            await cl3_broadcast({
                 "mode": "delete",
                 "id": post_id
             }, direct_wrap=True, usernames=chat["members"])
@@ -597,13 +598,13 @@ async def update_user(username, data: UpdateUserBody):
     db.usersv0.update_one({"_id": username}, {"$set": updated_fields})
 
     # Sync config between sessions
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_config",
         "payload": updated_fields
     }, direct_wrap=True, usernames=[username])
 
     # Send updated values to other clients
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_profile",
         "payload": {
             "_id": username,
@@ -651,8 +652,7 @@ async def delete_user(username, query_args: DeleteUserQueryArgs):
                 }
             },
         )
-        for client in app.cl.usernames.get(username, []):
-            client.kick(statuscode="LoggedOut")
+        await cl3_broadcast({"cmd": "kick"}, usernames=[username])
         if deletion_mode in ["immediate", "purge"]:
             security.delete_account(username, purge=(deletion_mode == "purge"))
     else:
@@ -699,10 +699,9 @@ async def ban_user(username, data: UpdateUserBanBody):
     if (data.state == "perm_ban") or (
         data.state == "temp_ban" and data.expires > time.time()
     ):
-        for client in app.cl.usernames.get(username, []):
-            client.kick(statuscode="Banned")
+        await cl3_broadcast({"cmd": "kick"}, usernames=[username])
     else:
-        app.cl.broadcast({
+        await cl3_broadcast({
             "mode": "update_config",
             "payload": {
                 "ban": data.model_dump()
@@ -805,7 +804,7 @@ async def send_alert(username, data: InboxMessageBody):
         abort(404)
 
     # Create inbox message
-    post = app.supporter.create_post("inbox", username, data.content)
+    post = await app.supporter.create_post("inbox", username, data.content)
 
     # Add log
     security.add_audit_log(
@@ -830,8 +829,7 @@ async def kick_user(username):
     db.usersv0.update_one({"_id": username}, {"$set": {"tokens": []}})
 
     # Kick clients
-    for client in app.cl.usernames.get(username, []):
-        client.kick(statuscode="Kicked")
+    await cl3_broadcast({"cmd": "kick"}, usernames=[username])
 
     # Add log
     security.add_audit_log(
@@ -863,7 +861,7 @@ async def clear_avatar(username):
     )
 
     # Sync config between sessions
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_config",
         "payload": {
             "avatar": ""
@@ -871,7 +869,7 @@ async def clear_avatar(username):
     }, direct_wrap=True, usernames=[username])
 
     # Send updated avatar to other clients
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_profile",
         "payload": {
             "_id": username,
@@ -909,7 +907,7 @@ async def clear_quote(username):
     )
 
     # Sync config between sessions
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_config",
         "payload": {
             "quote": ""
@@ -917,7 +915,7 @@ async def clear_quote(username):
     }, direct_wrap=True, usernames=[username])
 
      # Send updated quote to other clients
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_profile",
         "payload": {
             "_id": username,
@@ -979,7 +977,7 @@ async def update_chat(chat_id, data: UpdateChatBody):
     db.chats.update_one({"_id": chat_id}, {"$set": updated_vals})
 
     # Send update chat event
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_chat",
         "payload": updated_vals
     }, direct_wrap=True, usernames=chat["members"])
@@ -1009,7 +1007,7 @@ async def delete_chat(chat_id):
     db.chats.update_one({"_id": chat_id}, {"$set": {"deleted": True}})
 
     # Send delete chat event
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "delete",
         "id": chat_id
     }, direct_wrap=True, usernames=chat["members"])
@@ -1038,7 +1036,7 @@ async def restore_chat(chat_id):
     db.chats.update_one({"_id": chat_id}, {"$set": {"deleted": False}})
 
     # Send create chat event
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "create_chat",
         "payload": chat
     }, direct_wrap=True, usernames=chat["members"])
@@ -1075,7 +1073,7 @@ async def transfer_chat_ownership(chat_id, username):
     db.chats.update_one({"_id": chat_id}, {"$set": {"owner": username}})
 
     # Send update chat event
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_chat",
         "payload": {
             "_id": chat_id,
@@ -1328,7 +1326,7 @@ async def send_announcement(data: InboxMessageBody):
         abort(401)
 
     # Create announcement
-    post = app.supporter.create_post("inbox", "Server", data.content)
+    post = await app.supporter.create_post("inbox", "Server", data.content)
 
     # Add log
     security.add_audit_log(
@@ -1347,8 +1345,7 @@ async def kick_all_clients():
         abort(401)
 
     # Kick all clients
-    for client in copy(app.cl.clients):
-        client.kick()
+    await cl3_broadcast({"cmd": "kick"})
 
     # Add log
     security.add_audit_log("kicked_all", request.user, request.ip, {})
@@ -1369,8 +1366,7 @@ async def enable_repair_mode():
     app.supporter.repair_mode = True
 
     # Kick all clients
-    for client in copy(app.cl.clients):
-        client.kick(statuscode="Kicked")
+    await cl3_broadcast({"cmd": "kick"})
 
     # Add log
     security.add_audit_log("enabled_repair_mode", request.user, request.ip, {})

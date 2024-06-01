@@ -7,9 +7,10 @@ quart
 pymongo
 redis
 python-dotenv
-uvicorn
+hypercorn
 py-radix
 pydantic
 msgpack
 grpcio
 protobuf
+websockets

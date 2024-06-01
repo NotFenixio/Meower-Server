@@ -8,6 +8,7 @@ import pymongo, uuid, time
 
 import security
 from database import db, get_total_pages
+from cloudlink import cl3_broadcast
 from uploads import claim_file, delete_file
 from utils import log
 
@@ -64,11 +65,11 @@ async def update_post(query_args: PostIdQueryArgs, data: PostBody):
         abort(401)
 
     # Check ratelimit
-    if security.ratelimited(f"post:{request.user}"):
+    if await security.ratelimited(f"post:{request.user}"):
         abort(429)
 
     # Ratelimit
-    security.ratelimit(f"post:{request.user}", 6, 5)
+    await security.ratelimit(f"post:{request.user}", 6, 5)
     
     # Get post
     post = db.posts.find_one({"_id": query_args.id, "isDeleted": False})
@@ -124,7 +125,7 @@ async def update_post(query_args: PostIdQueryArgs, data: PostBody):
     }})
 
     # Send update post event
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_post",
         "payload": post
     }, direct_wrap=True, usernames=(None if post["post_origin"] == "home" else chat["members"]))
@@ -163,7 +164,7 @@ async def pin_post(post_id):
 
     post["pinned"] = True
 
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_post",
         "payload": post
     }, direct_wrap=True, usernames=(None if post["post_origin"] == "home" else chat["members"]))
@@ -201,7 +202,7 @@ async def unpin_post(post_id):
 
     post["pinned"] = False
 
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_post",
         "payload": post
     }, direct_wrap=True, usernames=(None if post["post_origin"] == "home" else chat["members"]))
@@ -217,11 +218,11 @@ async def delete_attachment(post_id: str, attachment_id: str):
         abort(401)
 
     # Check ratelimit
-    if security.ratelimited(f"post:{request.user}"):
+    if await security.ratelimited(f"post:{request.user}"):
         abort(429)
 
     # Ratelimit
-    security.ratelimit(f"post:{request.user}", 6, 5)
+    await security.ratelimit(f"post:{request.user}", 6, 5)
     
     # Get post
     post = db.posts.find_one({"_id": post_id, "isDeleted": False})
@@ -260,7 +261,7 @@ async def delete_attachment(post_id: str, attachment_id: str):
         }})
 
         # Send update post event
-        app.cl.broadcast({
+        await cl3_broadcast({
             "mode": "update_post",
             "payload": post
         }, direct_wrap=True, usernames=(None if post["post_origin"] == "home" else chat["members"]))
@@ -272,7 +273,7 @@ async def delete_attachment(post_id: str, attachment_id: str):
         }})
 
         # Send delete post event
-        app.cl.broadcast({
+        await cl3_broadcast({
             "mode": "delete",
             "id": post_id
         }, direct_wrap=True, usernames=(None if post["post_origin"] == "home" else chat["members"]))
@@ -290,11 +291,11 @@ async def delete_post(query_args: PostIdQueryArgs):
         abort(401)
 
     # Check ratelimit
-    if security.ratelimited(f"post:{request.user}"):
+    if await security.ratelimited(f"post:{request.user}"):
         abort(429)
 
     # Ratelimit
-    security.ratelimit(f"post:{request.user}", 6, 5)
+    await security.ratelimit(f"post:{request.user}", 6, 5)
     
     # Get post
     post = db.posts.find_one({"_id": query_args.id, "isDeleted": False})
@@ -328,7 +329,7 @@ async def delete_post(query_args: PostIdQueryArgs):
     }})
 
     # Send delete post event
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "delete",
         "id": query_args.id
     }, direct_wrap=True, usernames=(None if post["post_origin"] == "home" else chat["members"]))
@@ -372,11 +373,11 @@ async def create_chat_post(chat_id, data: PostBody):
         abort(401)
 
     # Check ratelimit
-    if security.ratelimited(f"post:{request.user}"):
+    if await security.ratelimited(f"post:{request.user}"):
         abort(429)
 
     # Ratelimit
-    security.ratelimit(f"post:{request.user}", 6, 5)
+    await security.ratelimit(f"post:{request.user}", 6, 5)
 
     # Check restrictions
     if security.is_restricted(request.user, security.Restrictions.CHAT_POSTS):
@@ -436,7 +437,7 @@ async def create_chat_post(chat_id, data: PostBody):
             ],)).start()
 
     # Create post
-    post = app.supporter.create_post(
+    post = await app.supporter.create_post(
         chat_id,
         request.user,
         data.content,

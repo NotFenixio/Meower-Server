@@ -3,8 +3,10 @@ from quart_schema import validate_querystring, validate_request, validate_respon
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
-import models
+import security, models
 from entities import posts
+from database import db, get_total_pages
+from cloudlink import cl3_broadcast
 from uploads import claim_file
 from utils import log
 from bitfield import UserBanRestrictions
@@ -80,7 +82,7 @@ async def create_home_post(data: PostBody, requester: models.db.User):
         abort(400)
 
     # Create post
-    post = posts.create_post(
+    post = await posts.create_post(
         requester["_id"],
         "home",
         data.content,
@@ -94,7 +96,7 @@ async def create_home_post(data: PostBody, requester: models.db.User):
 @check_auth(check_restrictions=UserBanRestrictions.HOME_POSTS)
 @auto_ratelimit("typing", "user", 5, 5)
 async def emit_typing(requester: models.db.User):
-    app.cl.broadcast({
+    await cl3_broadcast({
         "chatid": "livechat",
         "u": requester["username"],
         "state": 101

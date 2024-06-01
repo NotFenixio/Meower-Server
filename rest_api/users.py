@@ -9,6 +9,7 @@ import time
 import security, models, errors
 from entities import users
 from database import db, get_total_pages
+from cloudlink import cl3_broadcast
 
 
 users_bp = Blueprint("users_bp", __name__, url_prefix="/users/<username>")
@@ -104,11 +105,11 @@ async def update_relationship(username, data: UpdateRelationshipBody):
         abort(401)
 
     # Check ratelimit
-    if security.ratelimited(f"relationships:{request.user}"):
+    if await security.ratelimited(f"relationships:{request.user}"):
         abort(429)
 
     # Ratelimit
-    security.ratelimit(f"relationships:{request.user}", 10, 15)
+    await security.ratelimit(f"relationships:{request.user}", 10, 15)
 
     # Make sure the requested user isn't the requester
     if request.user == username:
@@ -137,7 +138,7 @@ async def update_relationship(username, data: UpdateRelationshipBody):
         db.relationships.update_one({"_id": {"from": request.user, "to": username}}, {"$set": relationship}, upsert=True)
 
     # Sync relationship between sessions
-    app.cl.broadcast({
+    await cl3_broadcast({
         "mode": "update_relationship",
         "payload": {
             "username": username,
@@ -158,11 +159,11 @@ async def get_dm_chat(username):
         abort(401)
 
     # Check ratelimit
-    if security.ratelimited(f"create_chat:{request.user}"):
+    if await security.ratelimited(f"create_chat:{request.user}"):
         abort(429)
 
     # Ratelimit
-    security.ratelimit(f"create_chat:{request.user}", 5, 30)
+    await security.ratelimit(f"create_chat:{request.user}", 5, 30)
 
     # Make sure the requested user isn't the requester
     if request.user == username:
